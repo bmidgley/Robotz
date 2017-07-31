@@ -28,6 +28,8 @@ void saveConfigCallback () {
 // sketch->include library->manage libraries
 // WiFiManager, ArduinoJson, ArduinoOTA
 
+// connect servo to GND, 3v, D9/GPIO16
+
 void setup() {
   WiFiManager wifiManager;
   
@@ -112,7 +114,6 @@ void setup() {
 
   configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
 
-  myservo.attach(16);
 }
 
 void loop() {
@@ -128,6 +129,7 @@ void loop() {
   }
   lastLoop = now;
 
+  myservo.attach(16);
   for (pos = 0; pos <= 90; pos += 1) { // goes from 0 degrees to 180 degrees
     // in steps of 1 degree
     myservo.write(pos);              // tell servo to go to position in variable 'pos'
@@ -137,5 +139,7 @@ void loop() {
     myservo.write(pos);              // tell servo to go to position in variable 'pos'
     delay(sdelay);                       // waits 15ms for the servo to reach the position
   }
+  myservo.detach();
+
   Serial.print(".");
 }
