@@ -17,6 +17,7 @@ bool shouldSaveConfig = false;
 char name[40] = "Robotz";
 ESP8266WebServer *webServer;
 long lastLoop = 0;
+bool activate = false;
 Servo myservo;
 
 void saveConfigCallback () {
@@ -110,10 +111,13 @@ void setup() {
   webServer->onNotFound([]() {
     webServer->send(404, "text/plain", "File not found");
   });
+  webServer->on("/", []() {
+    webServer->send(200, "text/html", "<html><a href=\"/\"><img src=\"http://flamebot.com/fly.png\"/></a></html>");
+    activate = true;
+  });
   webServer->begin();
 
   configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
-
 }
 
 void loop() {
@@ -123,23 +127,32 @@ void loop() {
   ArduinoOTA.handle();
   webServer->handleClient();
 
+  if ( digitalRead(TRIGGER_PIN) == LOW ) {
+    activate = true;
+  }
+
+  if(activate) {
+    Serial.println("activate");
+    myservo.attach(16);
+    for (pos = 0; pos <= 90; pos += 1) {
+      // in steps of 1 degree
+      myservo.write(pos);
+      delay(sdelay);
+    }
+    for (pos = 90; pos >= 0; pos -= 1) {
+      myservo.write(pos);
+      delay(sdelay);
+    }
+    myservo.detach();
+    Serial.print(".");
+    activate = false;
+  }
+
   long now = millis();
-  if (now - lastLoop < 5000) {
+  if (now - lastLoop < 1000 * 60 * 5) {
     return;
   }
   lastLoop = now;
 
-  myservo.attach(16);
-  for (pos = 0; pos <= 90; pos += 1) { // goes from 0 degrees to 180 degrees
-    // in steps of 1 degree
-    myservo.write(pos);              // tell servo to go to position in variable 'pos'
-    delay(sdelay);                       // waits 15ms for the servo to reach the position
-  }
-  for (pos = 90; pos >= 0; pos -= 1) { // goes from 180 degrees to 0 degrees
-    myservo.write(pos);              // tell servo to go to position in variable 'pos'
-    delay(sdelay);                       // waits 15ms for the servo to reach the position
-  }
-  myservo.detach();
-
-  Serial.print(".");
+  activate = true;
 }
