@@ -12,6 +12,7 @@
 #include <ESP8266httpUpdate.h>
 #include <WiFiClientSecure.h>
 #include <time.h>
+#include <Servo.h>
 
 // use arduino library manager to get libraries
 // sketch->include library->manage libraries
@@ -28,6 +29,8 @@ long lastSwap = 0;
 char msg[200];
 char errorMsg[200];
 int reconfigure_counter = 0;
+bool activate = false;
+Servo myservo;
 
 char robot_name[64] = "Robot1";
 char mqtt_server[40] = "mqtt.geothunk.com";
@@ -38,33 +41,22 @@ char ota_password[10] = "";
 char robot_topic_name[128];
 char error_topic_name[128];
 char ap_name[64];
-char *version = "1.6";
+char *version = "1.0";
+int sdelay = 4;
+int pos;
 
 unsigned int pm1 = 0;
 unsigned int pm2_5 = 0;
 unsigned int pm10 = 0;
 
 int reportGap = 5;
-int byteGPS=-1;
-char linea[300] = "";
-char comandoGPR[7] = "$GPRMC";
-int cont=0;
-int bien=0;
-int conta=0;
-int indices[13];
-int lats = 1;
-int latw = 0;
-int latf = 0;
-int lngs = 1;
-int lngw = 0;
-int lngf = 0;
 
 WiFiClientSecure *tcpClient;
 PubSubClient *client;
 ESP8266WebServer *webServer;
 SSD1306 display(0x3c,5,4);
 
-const char* serverIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input type='hidden' name='id'><input type='submit' value='Update'></form>";
+const char* serverIndex = "<html><a href=\"/\"><img src=\"http://flamebot.com/fly.png\"/></a></html>";
 
 t_httpUpdate_return update() {
   return ESPhttpUpdate.update("http://updates.geothunk.com/updates/robotz.ino.bin");
@@ -243,9 +235,6 @@ void setup() {
   client->setServer(mqtt_server, strtoul(mqtt_port, NULL, 10));
   client->setCallback(mqttCallback);
 
-  for (int i=0;i<300;i++) {
-    linea[i]=' ';
-  }
   tcpClient = new WiFiClientSecure();
   tcpClient->connect(WiFi.gatewayIP(), atoi(gps_port));
   snprintf(robot_topic_name, 128, "%s/robots", uuid);
@@ -277,6 +266,7 @@ void setup() {
     webServer->send(404, "text/plain", "File not found");
   });
   webServer->on("/", HTTP_GET, [](){
+    activate = true;
     webServer->sendHeader("Connection", "close");
     webServer->sendHeader("Access-Control-Allow-Origin", "*");
     webServer->send(200, "text/html", serverIndex);
@@ -292,14 +282,11 @@ void setup() {
 }
 
 void paint_display(long now, byte temperature, byte humidity) {
-  float f = 32 + temperature * 9.0 / 5.0;
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.setFont(ArialMT_Plain_24);
   display.drawString(DISPLAY_WIDTH, 0, String(robot_name));
   display.setFont(ArialMT_Plain_10);
-  display.drawString(DISPLAY_WIDTH, 24, String(f));
-  display.drawString(DISPLAY_WIDTH, 34, String(humidity));
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   if(now < 24 * 60 * 60 * 1000)
     display.drawString(0, 0, String(now / (60 * 60 * 1000)) + String("h ") + String(version));
@@ -319,6 +306,26 @@ void loop() {
   ArduinoOTA.handle();
   webServer->handleClient();
   client->loop();
+
+  if ( digitalRead(TRIGGER_PIN) == LOW ) {
+    activate = true;
+  }
+
+  if(activate) {
+    activate = false;
+    Serial.println("activate");
+
+    myservo.attach(16);
+    for (pos = 0; pos <= 90; pos += 1) {
+      // in steps of 1 degree
+      myservo.write(pos);
+      delay(sdelay);
+    }
+    for (pos = 90; pos >= 0; pos -= 1) {
+      myservo.write(pos);
+      delay(sdelay);
+    }
+  }
 
   long now = millis();
   if (now - lastMsg < reportGap * 1000) {
