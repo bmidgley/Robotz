@@ -36,7 +36,6 @@ char robot_name[64] = "Robot1";
 char mqtt_server[40] = "mqtt.geothunk.com";
 char mqtt_port[6] = "8080";
 char uuid[64] = "";
-char gps_port[10] = "";
 char ota_password[10] = "";
 char robot_topic_name[128];
 char error_topic_name[128];
@@ -128,7 +127,6 @@ void setup() {
           if(json["mqtt_server"]) strcpy(mqtt_server, json["mqtt_server"]);
           if(json["mqtt_port"]) strcpy(mqtt_port, json["mqtt_port"]);
           if(json["uuid"]) strcpy(uuid, json["uuid"]);
-          if(json["gps_port"]) strcpy(gps_port, json["gps_port"]);
           if(json["ota_password"]) {
             strcpy(ota_password, json["ota_password"]);
             create_ota_password = false;
@@ -148,7 +146,6 @@ void setup() {
   WiFiManagerParameter custom_robot_name("name", "robot name", robot_name, 64);
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
-  WiFiManagerParameter custom_gps_port("gps_port", "GPS server port (optional)", gps_port, 10);
   WiFiManagerParameter custom_ota_password("ota_password", "OTA password (optional)", ota_password, 6);
 
   wifiManager.setSaveConfigCallback(saveConfigCallback);
@@ -156,7 +153,6 @@ void setup() {
   wifiManager.addParameter(&custom_robot_name);
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
-  wifiManager.addParameter(&custom_gps_port);
   if(create_ota_password) {
     Serial.println("generating ota_password");
     wifiManager.addParameter(&custom_ota_password);
@@ -186,7 +182,6 @@ void setup() {
   strcpy(robot_name, custom_robot_name.getValue());
   strcpy(mqtt_server, custom_mqtt_server.getValue());
   strcpy(mqtt_port, custom_mqtt_port.getValue());
-  strcpy(gps_port, custom_gps_port.getValue());
   if(uuid == NULL || *uuid == 0) {
     Serial.println("generating uuid");
     ESP8266TrueRandom.uuid(uuidNumber);
@@ -203,7 +198,6 @@ void setup() {
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
     json["uuid"] = uuid;
-    json["gps_port"] = gps_port;
     json["ota_password"] = ota_password;
 
     File configFile = SPIFFS.open("/config.json", "w");
@@ -233,7 +227,6 @@ void setup() {
   client->setCallback(mqttCallback);
 
   tcpClient = new WiFiClientSecure();
-  tcpClient->connect(WiFi.gatewayIP(), atoi(gps_port));
   snprintf(robot_topic_name, 128, "%s/robots", uuid);
   snprintf(error_topic_name, 128, "%s/robots/errors", uuid);
 
