@@ -34,6 +34,7 @@ char msg[200];
 char errorMsg[200];
 int reconfigure_counter = 0;
 
+char robot_name[64] = "Robot1";
 char mqtt_server[40] = "mqtt.geothunk.com";
 char mqtt_port[6] = "8080";
 char uuid[64] = "";
@@ -48,7 +49,7 @@ unsigned int pm1 = 0;
 unsigned int pm2_5 = 0;
 unsigned int pm10 = 0;
 
-int reportGap = 30;
+int reportGap = 5;
 int byteGPS=-1;
 char linea[300] = "";
 char comandoGPR[7] = "$GPRMC";
@@ -140,6 +141,7 @@ void setup() {
         if (json.success()) {
           Serial.println("\nparsed json");
 
+          if(json["robot_name"]) strcpy(robot_name, json["robot_name"]);
           if(json["mqtt_server"]) strcpy(mqtt_server, json["mqtt_server"]);
           if(json["mqtt_port"]) strcpy(mqtt_port, json["mqtt_port"]);
           if(json["uuid"]) strcpy(uuid, json["uuid"]);
@@ -159,7 +161,8 @@ void setup() {
   }
 
   Serial.println("loaded config");
-  
+
+  WiFiManagerParameter custom_robot_name("name", "robot name", robot_name, 64);
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
   WiFiManagerParameter custom_gps_port("gps_port", "GPS server port (optional)", gps_port, 10);
@@ -167,6 +170,7 @@ void setup() {
 
   wifiManager.setSaveConfigCallback(saveConfigCallback);
 
+  wifiManager.addParameter(&custom_robot_name);
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   wifiManager.addParameter(&custom_gps_port);
@@ -176,7 +180,7 @@ void setup() {
     saveConfigCallback();
   }
 
-  snprintf(ap_name, 64, "Geothunk-%d", ESP8266TrueRandom.random(100, 1000));
+  snprintf(ap_name, 64, "%s-%d", robot_name, ESP8266TrueRandom.random(100, 1000));
   Serial.printf("autoconnect with AP name %s\n", ap_name);
 
   display.clear();
@@ -290,64 +294,6 @@ void setup() {
   configTime(3 * 3600, 0, "pool.ntp.org", "time.nist.gov");
 }
 
-void to_degrees(char *begin, char *end, int &whole, int &decimal) {
-  char copied[20];
-  float result;
-  strncpy(copied, begin, 10);
-  copied[end-begin] = '\0';
-  float nmea = atof(copied);
-  whole = (int)(nmea / 100);
-  nmea -= 100 * whole;
-  decimal = (int)(nmea * ( 10000.0 / 60.0));
-}
-
-int handle_gps_byte(int byteGPS) {
-  linea[conta]=byteGPS;
-  conta++;
-  if (byteGPS==13 || conta >= 300){
-   cont=0;
-   bien=0;
-   for (int i=1;i<7;i++){
-     if (linea[i]==comandoGPR[i-1]){
-       bien++;
-     }
-   }
-   if(bien==6){
-     for (int i=0;i<300;i++){
-       if (linea[i]==',' && cont < 13){
-         indices[cont]=i;
-         cont++;
-       }
-       if (linea[i]=='*'){
-         indices[12]=i;
-         cont++;
-       }
-     }
-     for (int i=0;i<12;i++){
-       switch(i){
-         case 2:
-           to_degrees(linea + 1 + indices[i], linea + indices[i + 1], latw, latf);
-           break;
-         case 3:
-           lats = linea[indices[i]+1] == 'N' ? 1 : -1;
-           break;
-         case 4:
-           to_degrees(linea + 1 + indices[i], linea + indices[i + 1], lngw, lngf);
-           break;
-         case 5:
-           lngs = linea[indices[i]+1] == 'E' ? 1 : -1;
-           break;
-       }
-     }
-     Serial.print(".");
-   }
-   conta=0;
-   for (int i=0;i<300;i++){
-     linea[i]=' ';
-   }
-  }
-}
-
 void paint_display(long now, byte temperature, byte humidity) {
   float f = 32 + temperature * 9.0 / 5.0;
   display.clear();
@@ -368,10 +314,6 @@ void paint_display(long now, byte temperature, byte humidity) {
   display.display();
 }
 
-void handleGPS() {
-  if(tcpClient->connected() && tcpClient->available()) handle_gps_byte(tcpClient->read());
-}
-
 void loop() {
   int index = 0;
   char value;
@@ -380,7 +322,6 @@ void loop() {
   byte humidity = 0;
   int err = SimpleDHTErrSuccess;
 
-  handleGPS();
   ArduinoOTA.handle();
   webServer->handleClient();
   client->loop();
@@ -424,6 +365,8 @@ void loop() {
 
   *errorMsg = 0;
   *msg = 0;
+
+  snprintf(msg, 200, "{\"name\": \"%s\"}", robot_name);
 
   if (mqttConnect()) {
     if (*msg) {
