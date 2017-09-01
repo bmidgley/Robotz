@@ -12,10 +12,6 @@
 #include <ESP8266httpUpdate.h>
 #include <WiFiClientSecure.h>
 #include <time.h>
-#include <SimpleDHT.h>
-
-int pinDHT11 = 2;
-SimpleDHT11 dht11;
 
 // use arduino library manager to get libraries
 // sketch->include library->manage libraries
@@ -23,7 +19,6 @@ SimpleDHT11 dht11;
 // wget https://github.com/marvinroger/ESP8266TrueRandom/archive/master.zip
 // sketch->include library->Add .zip Library
 
-#define MDNS_NAME "geothunk"
 #define TRIGGER_PIN 0
 
 bool shouldSaveConfig = false;
@@ -200,6 +195,7 @@ void setup() {
   wifiManager.autoConnect(ap_name);
   Serial.println("stored wifi connected");
 
+  strcpy(robot_name, custom_robot_name.getValue());
   strcpy(mqtt_server, custom_mqtt_server.getValue());
   strcpy(mqtt_port, custom_mqtt_port.getValue());
   strcpy(gps_port, custom_gps_port.getValue());
@@ -214,6 +210,7 @@ void setup() {
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
+    json["robot_name"] = robot_name;
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
     json["uuid"] = uuid;
@@ -273,7 +270,7 @@ void setup() {
   });
   ArduinoOTA.begin();
 
-  MDNS.begin(MDNS_NAME);
+  MDNS.begin(robot_name);
   MDNS.addService("http", "tcp", 80);
   webServer = new ESP8266WebServer(80);
   webServer->onNotFound([]() {
@@ -299,7 +296,7 @@ void paint_display(long now, byte temperature, byte humidity) {
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.setFont(ArialMT_Plain_24);
-  display.drawString(DISPLAY_WIDTH, 0, String(pm2_5) + String("/") + String(pm1) + String("/") + String(pm10));
+  display.drawString(DISPLAY_WIDTH, 0, String(robot_name));
   display.setFont(ArialMT_Plain_10);
   display.drawString(DISPLAY_WIDTH, 24, String(f));
   display.drawString(DISPLAY_WIDTH, 34, String(humidity));
@@ -318,9 +315,6 @@ void loop() {
   int index = 0;
   char value;
   char previousValue;
-  byte temperature = 0;
-  byte humidity = 0;
-  int err = SimpleDHTErrSuccess;
 
   ArduinoOTA.handle();
   webServer->handleClient();
