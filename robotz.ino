@@ -29,7 +29,7 @@ long lastSwap = 0;
 char msg[200];
 char errorMsg[200];
 int reconfigure_counter = 0;
-bool activate = false;
+bool activate = true;
 Servo myservo;
 
 char robot_name[64] = "Robot1";
@@ -44,10 +44,6 @@ char ap_name[64];
 char *version = "1.0";
 int sdelay = 4;
 int pos;
-
-unsigned int pm1 = 0;
-unsigned int pm2_5 = 0;
-unsigned int pm10 = 0;
 
 int reportGap = 5;
 
@@ -202,6 +198,7 @@ void setup() {
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
+    json["version"] = version;
     json["robot_name"] = robot_name;
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
