@@ -22,11 +22,6 @@ SimpleDHT11 dht11;
 // WiFiManager, ArduinoJson, PubSubClient, ArduinoOTA, SimpleDHT, "ESP8266 and ESP32 Oled Driver for SSD1306 display"
 // wget https://github.com/marvinroger/ESP8266TrueRandom/archive/master.zip
 // sketch->include library->Add .zip Library
-// or... manually...
-// unzip master.zip
-// mv ESP8266TrueRandom-master ~/Documents/Arduino/libraries/
-// or
-// mv ESP8266TrueRandom-master ~/Arduino/libraries/
 
 #define MDNS_NAME "geothunk"
 #define TRIGGER_PIN 0
@@ -44,7 +39,7 @@ char mqtt_port[6] = "8080";
 char uuid[64] = "";
 char gps_port[10] = "";
 char ota_password[10] = "";
-char particle_topic_name[128];
+char robot_topic_name[128];
 char error_topic_name[128];
 char ap_name[64];
 char *version = "1.6";
@@ -76,7 +71,7 @@ SSD1306 display(0x3c,5,4);
 const char* serverIndex = "<form method='POST' action='/update' enctype='multipart/form-data'><input type='hidden' name='id'><input type='submit' value='Update'></form>";
 
 t_httpUpdate_return update() {
-  return ESPhttpUpdate.update("http://updates.geothunk.com/updates/geothunk.ino.bin");
+  return ESPhttpUpdate.update("http://updates.geothunk.com/updates/robotz.ino.bin");
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -252,10 +247,10 @@ void setup() {
   }
   tcpClient = new WiFiClientSecure();
   tcpClient->connect(WiFi.gatewayIP(), atoi(gps_port));
-  snprintf(particle_topic_name, 128, "%s/particles", uuid);
-  snprintf(error_topic_name, 128, "%s/errors", uuid);
+  snprintf(robot_topic_name, 128, "%s/robots", uuid);
+  snprintf(error_topic_name, 128, "%s/robots/errors", uuid);
 
-  Serial.printf("publishing data on %s\n", particle_topic_name);
+  Serial.printf("publishing data on %s\n", robot_topic_name);
   Serial.printf("publishing errors on %s\n", error_topic_name);
 
   Serial.printf("ota_password is %s\n", ota_password);
@@ -425,61 +420,16 @@ void loop() {
     reconfigure_counter = 0;
   }
 
-  while (Serial.available()) {
-    value = Serial.read();
-    if ((index == 0 && value != 0x42) || (index == 1 && value != 0x4d)){
-      break;
-    }
-
-    if (index == 4 || index == 6 || index == 8 || index == 10 || index == 12 || index == 14) {
-      previousValue = value;
-    }
-    else if (index == 5) {
-      pm1 = 256 * previousValue + value;
-    }
-    else if (index == 7) {
-      pm2_5 = 256 * previousValue + value;
-    }
-    else if (index == 9) {
-      pm10 = 256 * previousValue + value;
-      lastReading = millis();
-    } else if (index > 15) {
-      break;
-    }
-    index++;
-  }
-  while(Serial.available()) {
-    Serial.read();
-  }
-
-  if(!tcpClient->connected() && atoi(gps_port) > 0) tcpClient->connect(WiFi.gatewayIP(), atoi(gps_port));
-
-  if ((err = dht11.read(pinDHT11, &temperature, &humidity, NULL)) != SimpleDHTErrSuccess) {
-    Serial.printf("Read DHT11 failed, err=%d", err);
-  }
-
-  snprintf(msg, 200, "{\"pm1\":%u,\"pm2_5\":%u,\"pm10\":%u,\"lat\":%s%d.%d,\"lng\":%s%d.%d,\"ts\":%u,\"t\":%d,\"h\":%d}",
-    pm1, pm2_5, pm10, lats > 0 ? "":"-", latw, latf, lngs > 0 ? "":"-", lngw, lngf, lastReading, temperature, humidity);
-
-  Serial.printf("%s %s\n", particle_topic_name, msg);
-
-  paint_display(now, temperature, humidity);
+  paint_display(now, 0, 0);
 
   *errorMsg = 0;
-  if(lastMsg - lastReading > 30000) {
-    snprintf(errorMsg, 200, "{\"lastMsg\": %u, \"lastReading\": %u}", lastMsg, lastReading);
-    Serial.printf("%s %s\n", error_topic_name, errorMsg);
-    if(now - lastSwap > 60000) {
-      Serial.println("swapping from here");
-      Serial.flush();
-      Serial.swap();
-      Serial.println("swapped to here");
-      lastSwap = now;
-    }
-  }
+  *msg = 0;
 
   if (mqttConnect()) {
-    client->publish(particle_topic_name, msg);
+    if (*msg) {
+      Serial.printf("%s %s\n", robot_topic_name, msg);
+      client->publish(robot_topic_name, msg);
+    }
     if (*errorMsg)
       client->publish(error_topic_name, errorMsg);
   }
