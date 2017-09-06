@@ -64,6 +64,15 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.print(receivedChar);
   }
   Serial.println();
+
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& json = jsonBuffer.parseObject(payload);
+  json.printTo(Serial);
+
+  if(json["activate"] >= activate) {
+    Serial.println("updating activate from bus");
+    activate = json["activate"];
+  }
 }
 
 int mqttConnect() {
