@@ -21,6 +21,7 @@
 // sketch->include library->Add .zip Library
 
 #define TRIGGER_PIN 0
+#define ACTIVATE_MAX 16
 
 bool shouldSaveConfig = false;
 long lastMsg = 0;
@@ -29,7 +30,7 @@ long lastSwap = 0;
 char msg[200];
 char errorMsg[200];
 int reconfigure_counter = 0;
-bool activate = true;
+int activate = ACTIVATE_MAX;
 Servo myservo;
 
 char name[20] = "Robot1";
@@ -187,11 +188,11 @@ void setup() {
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
-    json["name"] = name;
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
     json["uuid"] = uuid;
     json["ota_password"] = ota_password;
+    json["name"] = name;
 
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
@@ -244,7 +245,7 @@ void setup() {
     webServer->send(404, "text/plain", "File not found");
   });
   webServer->on("/", HTTP_GET, [](){
-    activate = true;
+    activate = ACTIVATE_MAX;
     webServer->sendHeader("Connection", "close");
     webServer->sendHeader("Access-Control-Allow-Origin", "*");
     webServer->send(200, "text/html", serverIndex);
@@ -290,25 +291,26 @@ void loop() {
   client->loop();
 
   if ( digitalRead(TRIGGER_PIN) == LOW ) {
-    activate = true;
+    activate = ACTIVATE_MAX;
   }
 
-  if(activate) {
-    activate = false;
+  if(activate > 0) {
     Serial.println("activate");
 
     myservo.attach(16);
     for (pos = 0; pos <= 90; pos += 1) {
       // in steps of 1 degree
       myservo.write(pos);
-      delay(sdelay);
+      delay(activate);
     }
     for (pos = 90; pos >= 0; pos -= 1) {
       myservo.write(pos);
-      delay(sdelay);
+      delay(activate);
     }
 
-    snprintf(msg, 200, "{\"name\":\"%s\",\"activate\":100}", name);
+    activate >>= 1;
+    snprintf(msg, 200, "{\"name\":\"%s\",\"activate\":%d}", name, activate);
+
   }
   
   if (mqttConnect()) {
