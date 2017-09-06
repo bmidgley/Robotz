@@ -32,14 +32,11 @@ int reconfigure_counter = 0;
 bool activate = true;
 Servo myservo;
 
-char robot_name[64] = "Robot1";
-char mqtt_server[40] = "mqtt.geothunk.com";
+char name[20] = "Robot1";
+char mqtt_server[20] = "mqtt.geothunk.com";
 char mqtt_port[6] = "8080";
 char uuid[64] = "";
 char ota_password[10] = "";
-char robot_topic_name[128];
-char error_topic_name[128];
-char ap_name[64];
 char *version = "1.0";
 int sdelay = 4;
 int pos;
@@ -74,7 +71,7 @@ int mqttConnect() {
   Serial.print("Attempting MQTT connection...");
   if (client->connect(uuid)) {
     Serial.println("connected");
-    client->subscribe("clients");
+    client->subscribe("+/robots");
     return 1;
   } else {
     Serial.print("failed, rc=");
@@ -123,7 +120,7 @@ void setup() {
         if (json.success()) {
           Serial.println("\nparsed json");
 
-          if(json["robot_name"]) strcpy(robot_name, json["robot_name"]);
+          if(json["name"]) strcpy(name, json["name"]);
           if(json["mqtt_server"]) strcpy(mqtt_server, json["mqtt_server"]);
           if(json["mqtt_port"]) strcpy(mqtt_port, json["mqtt_port"]);
           if(json["uuid"]) strcpy(uuid, json["uuid"]);
@@ -143,14 +140,14 @@ void setup() {
 
   Serial.println("loaded config");
 
-  WiFiManagerParameter custom_robot_name("name", "robot name", robot_name, 64);
+  WiFiManagerParameter custom_name("name", "robot name", name, 64);
   WiFiManagerParameter custom_mqtt_server("server", "mqtt server", mqtt_server, 40);
   WiFiManagerParameter custom_mqtt_port("port", "mqtt port", mqtt_port, 6);
   WiFiManagerParameter custom_ota_password("ota_password", "OTA password (optional)", ota_password, 6);
 
   wifiManager.setSaveConfigCallback(saveConfigCallback);
 
-  wifiManager.addParameter(&custom_robot_name);
+  wifiManager.addParameter(&custom_name);
   wifiManager.addParameter(&custom_mqtt_server);
   wifiManager.addParameter(&custom_mqtt_port);
   if(create_ota_password) {
@@ -158,9 +155,6 @@ void setup() {
     wifiManager.addParameter(&custom_ota_password);
     saveConfigCallback();
   }
-
-  snprintf(ap_name, 64, "%s-%d", robot_name, ESP8266TrueRandom.random(100, 1000));
-  Serial.printf("autoconnect with AP name %s\n", ap_name);
 
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
@@ -173,13 +167,13 @@ void setup() {
   }
   display.drawString(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2 - 14, String("Connect to this wifi"));
   display.setFont(ArialMT_Plain_16);
-  display.drawString(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2, String(ap_name));
+  display.drawString(DISPLAY_WIDTH/2, DISPLAY_HEIGHT/2, String(name));
   display.display();
   
-  wifiManager.autoConnect(ap_name);
+  wifiManager.autoConnect(name);
   Serial.println("stored wifi connected");
 
-  strcpy(robot_name, custom_robot_name.getValue());
+  strcpy(name, custom_name.getValue());
   strcpy(mqtt_server, custom_mqtt_server.getValue());
   strcpy(mqtt_port, custom_mqtt_port.getValue());
   if(uuid == NULL || *uuid == 0) {
@@ -193,8 +187,7 @@ void setup() {
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
-    json["version"] = version;
-    json["robot_name"] = robot_name;
+    json["name"] = name;
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
     json["uuid"] = uuid;
@@ -227,11 +220,6 @@ void setup() {
   client->setCallback(mqttCallback);
 
   tcpClient = new WiFiClientSecure();
-  snprintf(robot_topic_name, 128, "%s/robots", uuid);
-  snprintf(error_topic_name, 128, "%s/robots/errors", uuid);
-
-  Serial.printf("publishing data on %s\n", robot_topic_name);
-  Serial.printf("publishing errors on %s\n", error_topic_name);
 
   Serial.printf("ota_password is %s\n", ota_password);
 
@@ -249,7 +237,7 @@ void setup() {
   });
   ArduinoOTA.begin();
 
-  MDNS.begin(robot_name);
+  MDNS.begin(name);
   MDNS.addService("http", "tcp", 80);
   webServer = new ESP8266WebServer(80);
   webServer->onNotFound([]() {
@@ -275,7 +263,7 @@ void paint_display(long now, byte temperature, byte humidity) {
   display.clear();
   display.setTextAlignment(TEXT_ALIGN_RIGHT);
   display.setFont(ArialMT_Plain_24);
-  display.drawString(DISPLAY_WIDTH, 0, String(robot_name));
+  display.drawString(DISPLAY_WIDTH, 0, String(name));
   display.setFont(ArialMT_Plain_10);
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   if(now < 24 * 60 * 60 * 1000)
@@ -292,6 +280,10 @@ void loop() {
   int index = 0;
   char value;
   char previousValue;
+  char topic_name[90];
+
+  *errorMsg = 0;
+  *msg = 0;
 
   ArduinoOTA.handle();
   webServer->handleClient();
@@ -314,6 +306,21 @@ void loop() {
     for (pos = 90; pos >= 0; pos -= 1) {
       myservo.write(pos);
       delay(sdelay);
+    }
+
+    snprintf(msg, 200, "{\"name\":\"%s\",\"activate\":100}", name);
+  }
+  
+  if (mqttConnect()) {
+    if (*msg) {
+      snprintf(topic_name, 90, "%s/robots", uuid);
+      Serial.printf("%s %s\n", topic_name, msg);
+      client->publish(topic_name, msg);
+    }
+    if (*errorMsg) {
+      snprintf(topic_name, 90, "%s/robots/errors", uuid);
+      Serial.printf("%s %s\n", topic_name, msg);
+      client->publish(topic_name, errorMsg);
     }
   }
 
@@ -353,18 +360,4 @@ void loop() {
   }
 
   paint_display(now, 0, 0);
-
-  *errorMsg = 0;
-  *msg = 0;
-
-  snprintf(msg, 200, "{\"name\": \"%s\"}", robot_name);
-
-  if (mqttConnect()) {
-    if (*msg) {
-      Serial.printf("%s %s\n", robot_topic_name, msg);
-      client->publish(robot_topic_name, msg);
-    }
-    if (*errorMsg)
-      client->publish(error_topic_name, errorMsg);
-  }
 }
