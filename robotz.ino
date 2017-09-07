@@ -56,15 +56,7 @@ t_httpUpdate_return update() {
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-  for (int i=0;i<length;i++) {
-    char receivedChar = (char)payload[i];
-    Serial.print(receivedChar);
-  }
-  Serial.println();
-
+  Serial.printf("Message arrived [%s]\n", topic);
   DynamicJsonBuffer jsonBuffer;
   JsonObject& json = jsonBuffer.parseObject(payload);
   json.printTo(Serial);
