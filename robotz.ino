@@ -33,7 +33,7 @@ int reconfigure_counter = 0;
 int activate = ACTIVATE_MAX;
 Servo myservo;
 
-char name[20] = "Robot1";
+char name[20] = "Roby";
 char mqtt_server[20] = "mqtt.geothunk.com";
 char mqtt_port[6] = "8080";
 char uuid[64] = "";
@@ -61,8 +61,8 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   JsonObject& json = jsonBuffer.parseObject(payload);
   json.printTo(Serial);
 
-  if(json["activate"] >= activate) {
-    Serial.println("updating activate from bus");
+  if(json["activate"] && json["activate"] > activate) {
+    Serial.printf("\nupdating activate from bus\n");
     activate = json["activate"];
   }
 }
@@ -131,6 +131,8 @@ void setup() {
             create_ota_password = false;
           }
 
+          printf("name=%s mqtt_server=%s mqtt_port=%s uuid=%s ota_password=%s\n", name, mqtt_server, mqtt_port, uuid, ota_password);
+
         } else {
           Serial.println("failed to load json config");
         }
@@ -181,7 +183,7 @@ void setup() {
   if(uuid == NULL || *uuid == 0) {
     Serial.println("generating uuid");
     ESP8266TrueRandom.uuid(uuidNumber);
-    ESP8266TrueRandom.uuidToString(uuidNumber).toCharArray(uuid, 64);
+    ESP8266TrueRandom.uuidToString(uuidNumber).toCharArray(uuid, 8);
     saveConfigCallback();
   }
   
@@ -296,8 +298,6 @@ void loop() {
   }
 
   if(activate > 0) {
-    Serial.println("activate");
-
     myservo.attach(16);
     for (pos = 0; pos <= 90; pos += 1) {
       // in steps of 1 degree
@@ -311,7 +311,6 @@ void loop() {
 
     activate >>= 1;
     snprintf(msg, 200, "{\"name\":\"%s\",\"activate\":%d}", name, activate);
-
   }
   
   if (mqttConnect()) {
