@@ -21,7 +21,7 @@
 // sketch->include library->Add .zip Library
 
 #define TRIGGER_PIN 0
-#define ACTIVATE_MAX 16
+#define ACTIVATE_MAX 8
 
 bool shouldSaveConfig = false;
 long lastMsg = 0;
@@ -33,7 +33,7 @@ int reconfigure_counter = 0;
 int activate = ACTIVATE_MAX;
 Servo myservo;
 
-char name[20] = "Roby";
+char name[20] = "Robot1";
 char mqtt_server[20] = "mqtt.geothunk.com";
 char mqtt_port[6] = "8080";
 char uuid[64] = "";
@@ -116,13 +116,20 @@ void setup() {
         std::unique_ptr<char[]> buf(new char[size]);
 
         configFile.readBytes(buf.get(), size);
+
+        // manually parse name just in case it doesn't work below
+        char *nameStart = buf.get() + 6;
+        char *nameEnd = strchr(nameStart, '"');
+        strncpy(name, nameStart, nameEnd - nameStart);
+        name[nameEnd - nameStart] = '\0';
+
         DynamicJsonBuffer jsonBuffer;
         JsonObject& json = jsonBuffer.parseObject(buf.get());
         json.printTo(Serial);
         if (json.success()) {
           Serial.println("\nparsed json");
 
-          if(json["name"]) strcpy(name, json["name"]);
+          if(json["n"]) strcpy(name, json["n"]);
           if(json["mqtt_server"]) strcpy(mqtt_server, json["mqtt_server"]);
           if(json["mqtt_port"]) strcpy(mqtt_port, json["mqtt_port"]);
           if(json["uuid"]) strcpy(uuid, json["uuid"]);
@@ -186,16 +193,16 @@ void setup() {
     ESP8266TrueRandom.uuidToString(uuidNumber).toCharArray(uuid, 8);
     saveConfigCallback();
   }
-  
+
   if (shouldSaveConfig) {
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
+    json["n"] = name;
     json["mqtt_server"] = mqtt_server;
     json["mqtt_port"] = mqtt_port;
     json["uuid"] = uuid;
     json["ota_password"] = ota_password;
-    json["name"] = name;
 
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
@@ -297,7 +304,13 @@ void loop() {
     activate = ACTIVATE_MAX;
   }
 
-  if(activate > 0) {
+  long now = millis();
+  if (now - lastMsg < reportGap * 1000) {
+    return;
+  }
+  lastMsg = now;
+
+  while(activate > 0) {
     myservo.attach(16);
     for (pos = 0; pos <= 90; pos += 1) {
       // in steps of 1 degree
@@ -311,26 +324,20 @@ void loop() {
 
     activate >>= 1;
     snprintf(msg, 200, "{\"name\":\"%s\",\"activate\":%d}", name, activate);
-  }
-  
-  if (mqttConnect()) {
-    if (*msg) {
-      snprintf(topic_name, 90, "%s/robots", uuid);
-      Serial.printf("%s %s\n", topic_name, msg);
-      client->publish(topic_name, msg);
-    }
-    if (*errorMsg) {
-      snprintf(topic_name, 90, "%s/robots/errors", uuid);
-      Serial.printf("%s %s\n", topic_name, msg);
-      client->publish(topic_name, errorMsg);
-    }
-  }
 
-  long now = millis();
-  if (now - lastMsg < reportGap * 1000) {
-    return;
+    if (mqttConnect()) {
+      if (*msg) {
+        snprintf(topic_name, 90, "%s/robots", uuid);
+        Serial.printf("%s %s\n", topic_name, msg);
+        client->publish(topic_name, msg);
+      }
+      if (*errorMsg) {
+        snprintf(topic_name, 90, "%s/robots/errors", uuid);
+        Serial.printf("%s %s\n", topic_name, msg);
+        client->publish(topic_name, errorMsg);
+      }
+    }
   }
-  lastMsg = now;
   
   time_t clocktime = time(nullptr);
   Serial.println(ctime(&clocktime));
