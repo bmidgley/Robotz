@@ -23,6 +23,8 @@
 #define TRIGGER_PIN 0
 #define ACTIVATE_MAX 8
 
+int angle1 = 20;
+int angle2 = 55;
 bool shouldSaveConfig = false;
 long lastMsg = 0;
 long lastReading = 0;
@@ -300,24 +302,23 @@ void loop() {
   webServer->handleClient();
   client->loop();
 
+  long now = millis();
+
   if ( digitalRead(TRIGGER_PIN) == LOW ) {
     activate = ACTIVATE_MAX;
-  }
-
-  long now = millis();
-  if (now - lastMsg < reportGap * 1000) {
+  } else if (now - lastMsg < reportGap * 1000) {
     return;
   }
   lastMsg = now;
 
   while(activate > 0) {
     myservo.attach(16);
-    for (pos = 0; pos <= 90; pos += 1) {
+    for (pos = angle1; pos <= angle2; pos += 1) {
       // in steps of 1 degree
       myservo.write(pos);
       delay(activate);
     }
-    for (pos = 90; pos >= 0; pos -= 1) {
+    for (pos = angle2; pos >= angle1; pos -= 1) {
       myservo.write(pos);
       delay(activate);
     }
