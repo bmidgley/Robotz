@@ -39,7 +39,7 @@ char name[20] = "Robot1";
 char mqtt_server[20] = "mqtt.geothunk.com";
 char mqtt_port[6] = "8080";
 char uuid[64] = "";
-char ota_password[10] = "";
+char ota_password[10] = "012345678";
 char *version = "1.0";
 int sdelay = 4;
 int pos;
@@ -106,6 +106,7 @@ void setup() {
   
   ESP8266TrueRandom.uuid(uuidCode);
   ESP8266TrueRandom.uuidToString(uuidCode).toCharArray(ota_password, 7);
+  ota_password[6] = '\0';
 
   if (SPIFFS.begin()) {
     Serial.println("mounted file system");
@@ -137,6 +138,7 @@ void setup() {
           if(json["uuid"]) strcpy(uuid, json["uuid"]);
           if(json["ota_password"]) {
             strcpy(ota_password, json["ota_password"]);
+            ota_password[6] = '\0';
             create_ota_password = false;
           }
 
