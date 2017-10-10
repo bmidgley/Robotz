@@ -286,8 +286,7 @@ void paint_display(long now, byte temperature, byte humidity) {
   else
     display.drawString(0, 0, String(now / (24 * 60 * 60 * 1000)) + String("d ") + String(version));
   display.drawString(0, DISPLAY_HEIGHT - 10, WiFi.localIP().toString());
-  display.setTextAlignment(TEXT_ALIGN_RIGHT);
-  display.drawString(DISPLAY_WIDTH, DISPLAY_HEIGHT - 10, String(WiFi.SSID()));
+  display.drawString(0, DISPLAY_HEIGHT - 20, String(WiFi.SSID()));
   display.display();
 }
 
@@ -314,6 +313,14 @@ void loop() {
   lastMsg = now;
 
   while(activate > 0) {
+    
+    display.clear();
+    display.setTextAlignment(TEXT_ALIGN_CENTER_BOTH);
+    display.setFont(ArialMT_Plain_24);
+    display.drawString(DISPLAY_WIDTH/2, 15, String("Hello! from!"));
+    display.drawString(DISPLAY_WIDTH/2, 45, String(name));
+    display.display();
+  
     myservo.attach(16);
     for (pos = angle1; pos <= angle2; pos += 1) {
       // in steps of 1 degree
